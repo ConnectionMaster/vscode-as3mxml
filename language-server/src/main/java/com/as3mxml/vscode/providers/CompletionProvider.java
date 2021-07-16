@@ -1,5 +1,5 @@
 /*
-Copyright 2016-2020 Bowler Hat LLC
+Copyright 2016-2021 Bowler Hat LLC
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -26,9 +26,10 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 
-import com.as3mxml.vscode.project.ILspProject;
 import com.as3mxml.vscode.project.ActionScriptProjectData;
+import com.as3mxml.vscode.project.ILspProject;
 import com.as3mxml.vscode.utils.ASTUtils;
+import com.as3mxml.vscode.utils.ActionScriptProjectManager;
 import com.as3mxml.vscode.utils.AddImportData;
 import com.as3mxml.vscode.utils.CodeActionsUtils;
 import com.as3mxml.vscode.utils.CompilationUnitUtils.IncludeFileData;
@@ -44,7 +45,6 @@ import com.as3mxml.vscode.utils.MXMLNamespace;
 import com.as3mxml.vscode.utils.MXMLNamespaceUtils;
 import com.as3mxml.vscode.utils.ScopeUtils;
 import com.as3mxml.vscode.utils.SourcePathUtils;
-import com.as3mxml.vscode.utils.ActionScriptProjectManager;
 import com.as3mxml.vscode.utils.XmlnsRange;
 
 import org.apache.royale.compiler.common.ASModifier;
@@ -88,6 +88,7 @@ import org.apache.royale.compiler.scopes.IASScope;
 import org.apache.royale.compiler.tree.ASTNodeID;
 import org.apache.royale.compiler.tree.as.IASNode;
 import org.apache.royale.compiler.tree.as.IBinaryOperatorNode;
+import org.apache.royale.compiler.tree.as.IBlockNode;
 import org.apache.royale.compiler.tree.as.IClassNode;
 import org.apache.royale.compiler.tree.as.IContainerNode;
 import org.apache.royale.compiler.tree.as.IDynamicAccessNode;
@@ -100,6 +101,7 @@ import org.apache.royale.compiler.tree.as.IImportNode;
 import org.apache.royale.compiler.tree.as.IInterfaceNode;
 import org.apache.royale.compiler.tree.as.IKeywordNode;
 import org.apache.royale.compiler.tree.as.IMemberAccessExpressionNode;
+import org.apache.royale.compiler.tree.as.IModifierNode;
 import org.apache.royale.compiler.tree.as.IPackageNode;
 import org.apache.royale.compiler.tree.as.IScopedNode;
 import org.apache.royale.compiler.tree.as.ITypeNode;
@@ -109,6 +111,7 @@ import org.apache.royale.compiler.units.ICompilationUnit;
 import org.eclipse.lsp4j.Command;
 import org.eclipse.lsp4j.CompletionItem;
 import org.eclipse.lsp4j.CompletionItemKind;
+import org.eclipse.lsp4j.CompletionItemTag;
 import org.eclipse.lsp4j.CompletionList;
 import org.eclipse.lsp4j.CompletionParams;
 import org.eclipse.lsp4j.InsertTextFormat;
@@ -142,8 +145,8 @@ public class CompletionProvider {
                 cancelToken.checkCanceled();
             }
 
-            //this shouldn't be necessary, but if we ever forget to do this
-            //somewhere, completion results might be missing items.
+            // this shouldn't be necessary, but if we ever forget to do this
+            // somewhere, completion results might be missing items.
             completionTypes.clear();
 
             TextDocumentIdentifier textDocument = params.getTextDocument();
@@ -197,8 +200,8 @@ public class CompletionProvider {
                         }
                         return Either.forRight(result);
                     }
-                    //if we're inside an <fx:Script> tag, we want ActionScript completion,
-                    //so that's why we call isMXMLTagValidForCompletion()
+                    // if we're inside an <fx:Script> tag, we want ActionScript completion,
+                    // so that's why we call isMXMLTagValidForCompletion()
                     if (MXMLDataUtils.isMXMLCodeIntelligenceAvailableForTag(offsetTag)) {
                         ICompilationUnit offsetUnit = CompilerProjectUtils.findCompilationUnit(path, project);
                         CompletionList result = mxmlCompletion(offsetTag, path, currentOffset, offsetUnit, project);
@@ -221,11 +224,11 @@ public class CompletionProvider {
                     return Either.forRight(result);
                 }
                 if (offsetTag == null) {
-                    //it's possible for the offset tag to be null in an MXML file, but
-                    //we don't want to trigger ActionScript completion.
-                    //for some reason, the offset tag will be null if completion is
-                    //triggered at the asterisk:
-                    //<fx:Declarations>*
+                    // it's possible for the offset tag to be null in an MXML file, but
+                    // we don't want to trigger ActionScript completion.
+                    // for some reason, the offset tag will be null if completion is
+                    // triggered at the asterisk:
+                    // <fx:Declarations>*
                     CompletionList result = new CompletionList();
                     result.setIsIncomplete(false);
                     result.setItems(new ArrayList<>());
@@ -252,7 +255,7 @@ public class CompletionProvider {
         result.setIsIncomplete(false);
         result.setItems(new ArrayList<>());
         if (offsetNode == null) {
-            //we couldn't find a node at the specified location
+            // we couldn't find a node at the specified location
             return result;
         }
         IASNode parentNode = offsetNode.getParent();
@@ -263,7 +266,7 @@ public class CompletionProvider {
 
         String fileText = fileTracker.getText(path);
         if (!ASTUtils.isActionScriptCompletionAllowedInNode(offsetNode, fileText, currentOffset)) {
-            //if we're inside a node that shouldn't have completion!
+            // if we're inside a node that shouldn't have completion!
             return result;
         }
         boolean isMXML = path.toString().endsWith(FILE_EXTENSION_MXML);
@@ -286,7 +289,7 @@ public class CompletionProvider {
             nextChar = fileText.charAt(currentOffset);
         }
 
-        //variable types
+        // variable types
         if (offsetNode instanceof IVariableNode) {
             IVariableNode variableNode = (IVariableNode) offsetNode;
             IExpressionNode nameExpression = variableNode.getNameExpressionNode();
@@ -309,7 +312,7 @@ public class CompletionProvider {
                 return result;
             }
         }
-        //function return types
+        // function return types
         if (offsetNode instanceof IFunctionNode) {
             IFunctionNode functionNode = (IFunctionNode) offsetNode;
             IContainerNode parameters = functionNode.getParametersContainerNode();
@@ -331,7 +334,7 @@ public class CompletionProvider {
                 return result;
             }
         }
-        //new keyword types
+        // new keyword types
         if (parentNode != null && parentNode instanceof IFunctionCallNode) {
             IFunctionCallNode functionCallNode = (IFunctionCallNode) parentNode;
             if (functionCallNode.getNameNode() == offsetNode && functionCallNode.isNewExpression()) {
@@ -344,7 +347,7 @@ public class CompletionProvider {
             autoCompleteTypes(nodeAtPreviousOffset, addImportData, project, result);
             return result;
         }
-        //as and is keyword types
+        // as and is keyword types
         if (parentNode != null && parentNode instanceof IBinaryOperatorNode
                 && (parentNode.getNodeID() == ASTNodeID.Op_AsID || parentNode.getNodeID() == ASTNodeID.Op_IsID)) {
             IBinaryOperatorNode binaryOperatorNode = (IBinaryOperatorNode) parentNode;
@@ -359,21 +362,21 @@ public class CompletionProvider {
             autoCompleteTypes(nodeAtPreviousOffset, addImportData, project, result);
             return result;
         }
-        //class extends keyword
+        // class extends keyword
         if (offsetNode instanceof IClassNode && nodeAtPreviousOffset != null
                 && nodeAtPreviousOffset instanceof IKeywordNode
                 && nodeAtPreviousOffset.getNodeID() == ASTNodeID.KeywordExtendsID) {
             autoCompleteTypes(offsetNode, addImportData, project, result);
             return result;
         }
-        //class implements keyword
+        // class implements keyword
         if (offsetNode instanceof IClassNode && nodeAtPreviousOffset != null
                 && nodeAtPreviousOffset instanceof IKeywordNode
                 && nodeAtPreviousOffset.getNodeID() == ASTNodeID.KeywordImplementsID) {
             autoCompleteTypes(offsetNode, addImportData, project, result);
             return result;
         }
-        //interface extends keyword
+        // interface extends keyword
         if (offsetNode instanceof IInterfaceNode && nodeAtPreviousOffset != null
                 && nodeAtPreviousOffset instanceof IKeywordNode
                 && nodeAtPreviousOffset.getNodeID() == ASTNodeID.KeywordExtendsID) {
@@ -381,11 +384,11 @@ public class CompletionProvider {
             return result;
         }
 
-        //package (must be before member access)
+        // package (must be before member access)
         if (offsetNode instanceof IFileNode) {
             IFileNode fileNode = (IFileNode) offsetNode;
             if (fileNode.getChildCount() == 0 && fileNode.getAbsoluteEnd() == 0) {
-                //the file is completely empty
+                // the file is completely empty
                 autoCompletePackageBlock(fileNode.getFileSpecification(), project, result);
                 return result;
             }
@@ -396,7 +399,7 @@ public class CompletionProvider {
                 IIdentifierNode identifierNode = (IIdentifierNode) offsetNode;
                 String identifier = identifierNode.getName();
                 if (IASKeywordConstants.PACKAGE.startsWith(identifier)) {
-                    //the file contains only a substring of the package keyword
+                    // the file contains only a substring of the package keyword
                     autoCompletePackageBlock(offsetNode.getFileSpecification(), project, result);
                     return result;
                 }
@@ -416,7 +419,7 @@ public class CompletionProvider {
             }
         }
         if (parentNode != null && parentNode instanceof IPackageNode) {
-            //we'll get here if the last character in the package name is .
+            // we'll get here if the last character in the package name is .
             IPackageNode packageNode = (IPackageNode) parentNode;
             IExpressionNode nameNode = packageNode.getNameExpressionNode();
             if (offsetNode == nameNode) {
@@ -430,7 +433,7 @@ public class CompletionProvider {
             }
         }
 
-        //import (must be before member access)
+        // import (must be before member access)
         if (parentNode != null && parentNode instanceof IImportNode) {
             IImportNode importNode = (IImportNode) parentNode;
             IExpressionNode nameNode = importNode.getImportNameNode();
@@ -459,7 +462,7 @@ public class CompletionProvider {
             return result;
         }
 
-        //member access
+        // member access
         if (offsetNode instanceof IMemberAccessExpressionNode) {
             IMemberAccessExpressionNode memberAccessNode = (IMemberAccessExpressionNode) offsetNode;
             IExpressionNode leftOperand = memberAccessNode.getLeftOperandNode();
@@ -477,14 +480,14 @@ public class CompletionProvider {
         }
         if (parentNode != null && parentNode instanceof IMemberAccessExpressionNode) {
             IMemberAccessExpressionNode memberAccessNode = (IMemberAccessExpressionNode) parentNode;
-            //you would expect that the offset node could only be the right
-            //operand, but it's actually possible for it to be the left operand,
-            //even if the . has been typed! only sometimes, though.
+            // you would expect that the offset node could only be the right
+            // operand, but it's actually possible for it to be the left operand,
+            // even if the . has been typed! only sometimes, though.
             boolean isValidLeft = true;
             if (offsetNode == memberAccessNode.getLeftOperandNode()
                     && memberAccessNode.getRightOperandNode() instanceof IIdentifierNode) {
-                //if the left and right operands both exist, then this is not
-                //member access and we should skip ahead
+                // if the left and right operands both exist, then this is not
+                // member access and we should skip ahead
                 isValidLeft = false;
             }
             if (offsetNode == memberAccessNode.getRightOperandNode() || isValidLeft) {
@@ -493,9 +496,9 @@ public class CompletionProvider {
             }
         }
         if (nodeAtPreviousOffset != null && nodeAtPreviousOffset instanceof IMemberAccessExpressionNode) {
-            //depending on the left operand, if a . is typed, the member access
-            //may end up being the previous node instead of the parent or offset
-            //node, so check if the right operand is empty
+            // depending on the left operand, if a . is typed, the member access
+            // may end up being the previous node instead of the parent or offset
+            // node, so check if the right operand is empty
             IMemberAccessExpressionNode memberAccessNode = (IMemberAccessExpressionNode) nodeAtPreviousOffset;
             IExpressionNode rightOperandNode = memberAccessNode.getRightOperandNode();
             if (rightOperandNode instanceof IIdentifierNode) {
@@ -507,7 +510,22 @@ public class CompletionProvider {
             }
         }
 
-        //function overrides
+        // function overrides
+        if(nodeAtPreviousOffset instanceof IModifierNode) {
+            IModifierNode modifierNode = (IModifierNode) nodeAtPreviousOffset;
+            if(ASModifier.OVERRIDE.equals(modifierNode.getModifier())) {
+                autoCompleteFunctionOverrides(modifierNode, project, result);
+                return result;
+            }
+        }
+        if (offsetNode instanceof IScopedNode && offsetNode instanceof IBlockNode && parentNode instanceof IClassNode
+                && nodeAtPreviousOffset instanceof IIdentifierNode) {
+            IIdentifierNode previousIdentifier = (IIdentifierNode) nodeAtPreviousOffset;
+            if (IASKeywordConstants.OVERRIDE.equals(previousIdentifier.getName())) {
+                autoCompleteFunctionOverrides(previousIdentifier, project, result);
+                return result;
+            }
+        }
         if (parentNode != null && parentNode instanceof IFunctionNode && offsetNode instanceof IIdentifierNode) {
             IFunctionNode functionNode = (IFunctionNode) parentNode;
             if (offsetNode == functionNode.getNameExpressionNode()) {
@@ -535,18 +553,18 @@ public class CompletionProvider {
             }
         }
 
-        //local scope
+        // local scope
         IASNode currentNodeForScope = offsetNode;
         do {
-            //just keep traversing up until we get a scoped node or run out of
-            //nodes to check
+            // just keep traversing up until we get a scoped node or run out of
+            // nodes to check
             if (currentNodeForScope instanceof IScopedNode) {
                 IScopedNode scopedNode = (IScopedNode) currentNodeForScope;
 
-                //include all members and local things that are in scope
+                // include all members and local things that are in scope
                 autoCompleteScope(scopedNode, false, nextChar, addImportData, project, result);
 
-                //include all public definitions
+                // include all public definitions
                 IASScope scope = scopedNode.getScope();
                 IDefinition definitionToSkip = scope.getDefinition();
                 autoCompleteDefinitionsForActionScript(result, project, scopedNode, false, null, definitionToSkip,
@@ -568,7 +586,7 @@ public class CompletionProvider {
 
         String fileText = fileTracker.getText(path);
         if (ASTUtils.isInXMLComment(fileText, currentOffset)) {
-            //if we're inside a comment, no completion!
+            // if we're inside a comment, no completion!
             return result;
         }
 
@@ -590,22 +608,22 @@ public class CompletionProvider {
 
         IMXMLTagData parentTag = offsetTag.getParentTag();
 
-        //for some reason, the attributes list includes the >, but that's not
-        //what we want here, so check if currentOffset isn't the end of the tag!
+        // for some reason, the attributes list includes the >, but that's not
+        // what we want here, so check if currentOffset isn't the end of the tag!
         boolean isAttribute = offsetTag.isOffsetInAttributeList(currentOffset)
                 && currentOffset < offsetTag.getAbsoluteEnd();
         if (isAttribute && offsetTag.isCloseTag()) {
             return result;
         }
         boolean isTagName = false;
-        if (offsetTag instanceof MXMLTagData) //this shouldn't ever be false
+        if (offsetTag instanceof MXMLTagData) // this shouldn't ever be false
         {
             MXMLTagData mxmlTagData = (MXMLTagData) offsetTag;
-            //getNameStart() and getNameEnd() are not defined on IMXMLTagData
+            // getNameStart() and getNameEnd() are not defined on IMXMLTagData
             isTagName = MXMLData.contains(mxmlTagData.getNameStart(), mxmlTagData.getNameEnd(), currentOffset);
         }
 
-        //an implicit offset tag may mean that we're trying to close a tag
+        // an implicit offset tag may mean that we're trying to close a tag
         if (parentTag != null && offsetTag.isImplicit()) {
             IMXMLTagData nextTag = offsetTag.getNextTag();
             if (nextTag != null && nextTag.isImplicit() && nextTag.isCloseTag()
@@ -613,14 +631,14 @@ public class CompletionProvider {
                     && parentTag.getShortName().startsWith(offsetTag.getShortName())) {
                 String closeTagText = "</" + nextTag.getName() + ">";
                 CompletionItem closeTagItem = new CompletionItem();
-                //display the full close tag
+                // display the full close tag
                 closeTagItem.setLabel(closeTagText);
-                //strip </ from the insert text
+                // strip </ from the insert text
                 String insertText = closeTagText.substring(2);
                 int prefixLength = offsetTag.getPrefix().length();
                 if (prefixLength > 0) {
-                    //if the prefix already exists, strip it away so that the
-                    //editor won't duplicate it.
+                    // if the prefix already exists, strip it away so that the
+                    // editor won't duplicate it.
                     insertText = insertText.substring(prefixLength + 1);
                 }
                 closeTagItem.setInsertText(insertText);
@@ -629,7 +647,7 @@ public class CompletionProvider {
             }
         }
 
-        //inside <fx:Declarations>
+        // inside <fx:Declarations>
         if (MXMLDataUtils.isDeclarationsTag(offsetTag)) {
             if (!isAttribute) {
                 autoCompleteDefinitionsForMXML(result, project, offsetUnit, offsetTag, true, includeOpenTagBracket,
@@ -649,9 +667,9 @@ public class CompletionProvider {
                     IClassDefinition classDefinition = (IClassDefinition) parentDefinition;
                     String offsetPrefix = offsetTag.getPrefix();
                     if (offsetPrefix.length() == 0 || parentTag.getPrefix().equals(offsetPrefix)) {
-                        //only add members if the prefix is the same as the
-                        //parent tag. members can't have different prefixes.
-                        //also allow members when we don't have a prefix.
+                        // only add members if the prefix is the same as the
+                        // parent tag. members can't have different prefixes.
+                        // also allow members when we don't have a prefix.
                         addMembersForMXMLTypeToAutoComplete(classDefinition, parentTag, offsetUnit, false, false,
                                 offsetPrefix.length() == 0, nextChar, addImportData, xmlnsPosition, project, result);
                     }
@@ -663,31 +681,31 @@ public class CompletionProvider {
                         IMXMLData mxmlParent = offsetTag.getParent();
                         if (mxmlParent != null && parentTag.equals(mxmlParent.getRootTag())) {
                             if (offsetPrefix.length() == 0) {
-                                //this tag doesn't have a prefix
+                                // this tag doesn't have a prefix
                                 addRootMXMLLanguageTagsToAutoComplete(offsetTag, fxNS.prefix, true,
                                         includeOpenTagBracket, result);
                             } else if (offsetPrefix.equals(fxNS.prefix)) {
-                                //this tag has a prefix
+                                // this tag has a prefix
                                 addRootMXMLLanguageTagsToAutoComplete(offsetTag, fxNS.prefix, false, false, result);
                             }
                         }
                         if (offsetPrefix.length() == 0) {
-                            //this tag doesn't have a prefix
+                            // this tag doesn't have a prefix
                             addMXMLLanguageTagToAutoComplete(IMXMLLanguageConstants.COMPONENT, fxNS.prefix,
                                     includeOpenTagBracket, true, result);
                         } else if (offsetPrefix.equals(fxNS.prefix)) {
-                            //this tag has a prefix
+                            // this tag has a prefix
                             addMXMLLanguageTagToAutoComplete(IMXMLLanguageConstants.COMPONENT, fxNS.prefix, false,
                                     false, result);
                         }
                         String defaultPropertyName = classDefinition.getDefaultPropertyName(project);
-                        //if [DefaultProperty] is set, then we can instantiate
-                        //types as child elements
-                        //but we don't want to do that when in an attribute
+                        // if [DefaultProperty] is set, then we can instantiate
+                        // types as child elements
+                        // but we don't want to do that when in an attribute
                         boolean allowTypesAsChildren = defaultPropertyName != null;
                         if (!allowTypesAsChildren) {
-                            //similar to [DefaultProperty], if a component implements
-                            //mx.core.IContainer, we can instantiate types as children
+                            // similar to [DefaultProperty], if a component implements
+                            // mx.core.IContainer, we can instantiate types as children
                             String containerInterface = project.getContainerInterface();
                             allowTypesAsChildren = classDefinition.isInstanceOf(containerInterface, project);
                         }
@@ -710,8 +728,8 @@ public class CompletionProvider {
                         }
                     }
                 } else {
-                    //the parent is something like a property, so matching the
-                    //prefix is not required
+                    // the parent is something like a property, so matching the
+                    // prefix is not required
                     autoCompleteTypesForMXMLFromExistingTag(result, project, offsetUnit, offsetTag, nextChar, null,
                             xmlnsPosition);
                 }
@@ -752,13 +770,13 @@ public class CompletionProvider {
                 addMXMLLanguageTagToAutoComplete(IMXMLLanguageConstants.COMPONENT, fxNS.prefix, includeOpenTagBracket,
                         true, result);
                 String defaultPropertyName = classDefinition.getDefaultPropertyName(project);
-                //if [DefaultProperty] is set, then we can instantiate
-                //types as child elements
-                //but we don't want to do that when in an attribute
+                // if [DefaultProperty] is set, then we can instantiate
+                // types as child elements
+                // but we don't want to do that when in an attribute
                 boolean allowTypesAsChildren = defaultPropertyName != null;
                 if (!allowTypesAsChildren) {
-                    //similar to [DefaultProperty], if a component implements
-                    //mx.core.IContainer, we can instantiate types as children
+                    // similar to [DefaultProperty], if a component implements
+                    // mx.core.IContainer, we can instantiate types as children
                     String containerInterface = project.getContainerInterface();
                     allowTypesAsChildren = classDefinition.isInstanceOf(containerInterface, project);
                 }
@@ -793,9 +811,9 @@ public class CompletionProvider {
             return result;
         }
         if (offsetDefinition instanceof IInterfaceDefinition) {
-            //<fx:Component> resolves to an IInterfaceDefinition, but there's
-            //nothing to add to the result, so return it as-is and skip the
-            //warning below
+            // <fx:Component> resolves to an IInterfaceDefinition, but there's
+            // nothing to add to the result, so return it as-is and skip the
+            // warning below
             return result;
         }
         System.err.println("Unknown definition for MXML completion: " + offsetDefinition.getClass());
@@ -861,7 +879,7 @@ public class CompletionProvider {
         autoCompleteKeyword(IASKeywordConstants.FOR, result);
         autoCompleteKeyword(IASKeywordConstants.FUNCTION, result);
         if (isTypeScope) {
-            //get keyword can only be used in a class/interface
+            // get keyword can only be used in a class/interface
             autoCompleteKeyword(IASKeywordConstants.GET, result);
         }
         autoCompleteKeyword(IASKeywordConstants.GOTO, result);
@@ -877,49 +895,49 @@ public class CompletionProvider {
             autoCompleteKeyword(IASKeywordConstants.INTERFACE, result);
         }
         if (!isInFunction) {
-            //namespaces can't be in functions
+            // namespaces can't be in functions
             autoCompleteKeyword(IASKeywordConstants.INTERNAL, result);
         }
         autoCompleteKeyword(IASKeywordConstants.IS, result);
         autoCompleteKeyword(IASKeywordConstants.NAMESPACE, result);
         if (isClassScope) {
-            //native keyword may only be used for class members
+            // native keyword may only be used for class members
             autoCompleteKeyword(IASKeywordConstants.NATIVE, result);
         }
         autoCompleteKeyword(IASKeywordConstants.NEW, result);
         if (isClassScope) {
-            //override keyword may only be used for class members
+            // override keyword may only be used for class members
             autoCompleteKeyword(IASKeywordConstants.OVERRIDE, result);
         }
         if (isFileScope) {
-            //a package can only be defined directly in a file
+            // a package can only be defined directly in a file
             autoCompleteKeyword(IASKeywordConstants.PACKAGE, result);
         }
         if (isPackageScope || isClassScope) {
-            //namespaces can't be in functions
+            // namespaces can't be in functions
             autoCompleteKeyword(IASKeywordConstants.PRIVATE, result);
             autoCompleteKeyword(IASKeywordConstants.PROTECTED, result);
             autoCompleteKeyword(IASKeywordConstants.PUBLIC, result);
         }
         if (isInFunction) {
-            //can only return from a function
+            // can only return from a function
             autoCompleteKeyword(IASKeywordConstants.RETURN, result);
         }
         if (isTypeScope) {
-            //set keyword can only be used in a class/interface
+            // set keyword can only be used in a class/interface
             autoCompleteKeyword(IASKeywordConstants.SET, result);
         }
         if (isClassScope) {
-            //static keyword may only be used for class members
+            // static keyword may only be used for class members
             autoCompleteKeyword(IASKeywordConstants.STATIC, result);
         }
         if (isInFunction && isInClass) {
-            //can only be used in functions that are in classes
+            // can only be used in functions that are in classes
             autoCompleteKeyword(IASKeywordConstants.SUPER, result);
         }
         autoCompleteKeyword(IASKeywordConstants.SWITCH, result);
         if (isInFunction) {
-            //this should only be used in functions
+            // this should only be used in functions
             autoCompleteKeyword(IASKeywordConstants.THIS, result);
         }
         autoCompleteKeyword(IASKeywordConstants.THROW, result);
@@ -950,15 +968,15 @@ public class CompletionProvider {
 
     private void autoCompleteTypes(IASNode withNode, AddImportData addImportData, ILspProject project,
             CompletionList result) {
-        //start by getting the types in scope
+        // start by getting the types in scope
         IASNode node = withNode;
         do {
-            //just keep traversing up until we get a scoped node or run out of
-            //nodes to check
+            // just keep traversing up until we get a scoped node or run out of
+            // nodes to check
             if (node instanceof IScopedNode) {
                 IScopedNode scopedNode = (IScopedNode) node;
 
-                //include all members and local things that are in scope
+                // include all members and local things that are in scope
                 autoCompleteScope(scopedNode, true, (char) -1, addImportData, project, result);
                 break;
             }
@@ -997,8 +1015,8 @@ public class CompletionProvider {
                             ISetterDefinition setter = (ISetterDefinition) localDefinition;
                             IGetterDefinition getter = setter.resolveGetter(project);
                             if (getter != null) {
-                                //skip the setter if there's also a getter because
-                                //it would add a duplicate entry
+                                // skip the setter if there's also a getter because
+                                // it would add a duplicate entry
                                 continue;
                             }
                         }
@@ -1011,13 +1029,21 @@ public class CompletionProvider {
         }
     }
 
-    private void autoCompleteFunctionOverrides(IFunctionNode node, ILspProject project, CompletionList result) {
-        String namespace = node.getNamespace();
-        boolean isGetter = node.isGetter();
-        boolean isSetter = node.isSetter();
+    private void autoCompleteFunctionOverrides(IASNode node, ILspProject project, CompletionList result) {
+        boolean needsFunctionKeyword = true;
+        String namespace = null;
+        boolean isGetter = false;
+        boolean isSetter = false;
+        if (node instanceof IFunctionNode) {
+            IFunctionNode functionNode = (IFunctionNode) node;
+            namespace = functionNode.getNamespace();
+            isGetter = functionNode.isGetter();
+            isSetter = functionNode.isSetter();
+            needsFunctionKeyword = false;
+        }
         IClassNode classNode = (IClassNode) node.getAncestorOfType(IClassNode.class);
         if (classNode == null) {
-            //this can happen in MXML files
+            // this can happen in MXML files
             return;
         }
 
@@ -1047,21 +1073,53 @@ public class CompletionProvider {
             boolean otherIsGetter = functionDefinition instanceof IGetterDefinition;
             boolean otherIsSetter = functionDefinition instanceof ISetterDefinition;
             String otherNamespace = functionDefinition.getNamespaceReference().getBaseName();
-            if (isGetter != otherIsGetter || isSetter != otherIsSetter || !namespace.equals(otherNamespace)) {
+            if ((isGetter && !otherIsGetter) || (isSetter && !otherIsSetter)
+                    || (namespace != null && !namespace.equals(otherNamespace))) {
                 continue;
             }
             String functionName = functionDefinition.getBaseName();
             if (functionName.length() == 0) {
-                //vscode expects all items to have a name
+                // vscode expects all items to have a name
                 continue;
             }
-            if (functionNames.contains(functionName)) {
-                //avoid duplicates
+            StringBuilder functionNameBuilder = new StringBuilder();
+            functionNameBuilder.append(functionName);
+            if(otherIsGetter)
+            {
+                functionNameBuilder.append(" (");
+                functionNameBuilder.append(IASKeywordConstants.GET);
+                functionNameBuilder.append(")");
+            }
+            else if(otherIsSetter)
+            {
+                functionNameBuilder.append(" (");
+                functionNameBuilder.append(IASKeywordConstants.SET);
+                functionNameBuilder.append(")");
+            }
+            String functionNameWithModifier = functionNameBuilder.toString();
+            if (functionNames.contains(functionNameWithModifier)) {
+                // avoid duplicates
                 continue;
             }
-            functionNames.add(functionName);
+            functionNames.add(functionNameWithModifier);
 
             StringBuilder insertText = new StringBuilder();
+            if (namespace == null) {
+                insertText.append(otherNamespace);
+                insertText.append(" ");
+            }
+            if (needsFunctionKeyword) {
+                insertText.append(IASKeywordConstants.FUNCTION);
+                insertText.append(" ");
+            }
+            if (!isGetter && otherIsGetter) {
+                insertText.append(IASKeywordConstants.GET);
+                insertText.append(" ");
+            }
+            if (!isSetter && otherIsSetter) {
+                insertText.append(IASKeywordConstants.SET);
+                insertText.append(" ");
+            }
             insertText.append(functionName);
             insertText.append("(");
             IParameterDefinition[] params = functionDefinition.getParameters();
@@ -1097,6 +1155,9 @@ public class CompletionProvider {
 
             CompletionItem item = CompletionItemUtils.createDefinitionItem(functionDefinition, project);
             item.setInsertText(insertText.toString());
+            if((!isGetter && otherIsGetter) || (!isSetter && otherIsSetter)) {
+                item.setLabel(functionNameWithModifier);
+            }
             resultItems.add(item);
         }
     }
@@ -1150,7 +1211,7 @@ public class CompletionProvider {
     }
 
     private void autoCompletePackageBlock(IFileSpecification fileSpec, ILspProject project, CompletionList result) {
-        //we'll guess the package name based on path of the parent directory
+        // we'll guess the package name based on path of the parent directory
         File unitFile = new File(fileSpec.getPath());
         unitFile = unitFile.getParentFile();
         String expectedPackage = SourcePathUtils.getPackageForDirectoryPath(unitFile.toPath(), project);
@@ -1165,11 +1226,11 @@ public class CompletionProvider {
         unitFile = unitFile.getParentFile();
         String expectedPackage = SourcePathUtils.getPackageForDirectoryPath(unitFile.toPath(), project);
         if (expectedPackage.length() == 0) {
-            //it's the top level package
+            // it's the top level package
             return;
         }
         if (partialPackageName.startsWith(expectedPackage)) {
-            //we already have the correct package, maybe with some extra
+            // we already have the correct package, maybe with some extra
             return;
         }
         if (partialPackageName.contains(".") && expectedPackage.startsWith(partialPackageName)) {
@@ -1192,13 +1253,13 @@ public class CompletionProvider {
             try {
                 definitions = unit.getFileScopeRequest().get().getExternallyVisibleDefinitions();
             } catch (Exception e) {
-                //safe to ignore
+                // safe to ignore
                 continue;
             }
             for (IDefinition definition : definitions) {
                 String qualifiedName = definition.getQualifiedName();
                 if (qualifiedName.equals(definition.getBaseName())) {
-                    //this definition is top-level. no import required.
+                    // this definition is top-level. no import required.
                     continue;
                 }
                 if (qualifiedName.startsWith(importName)) {
@@ -1426,7 +1487,7 @@ public class CompletionProvider {
         typeScope.getAllPropertiesForMemberAccess((CompilerProject) project, memberAccessDefinitions, namespaceSet);
         for (IDefinition localDefinition : memberAccessDefinitions) {
             if (localDefinition.isOverride()) {
-                //overrides would add unnecessary duplicates to the list
+                // overrides would add unnecessary duplicates to the list
                 continue;
             }
             if (excludeMetaTags != null && excludeMetaTags.length > 0) {
@@ -1442,49 +1503,49 @@ public class CompletionProvider {
                     continue;
                 }
             }
-            //there are some things that we need to skip in MXML
+            // there are some things that we need to skip in MXML
             if (forMXML) {
                 if (localDefinition instanceof IGetterDefinition) {
-                    //no getters because we can only set
+                    // no getters because we can only set
                     continue;
                 } else if (localDefinition instanceof IFunctionDefinition
                         && !(localDefinition instanceof ISetterDefinition)) {
-                    //no calling functions, unless they're setters
+                    // no calling functions, unless they're setters
                     continue;
                 }
-            } else //actionscript
+            } else // actionscript
             {
                 if (localDefinition instanceof ISetterDefinition) {
                     ISetterDefinition setter = (ISetterDefinition) localDefinition;
                     IGetterDefinition getter = setter.resolveGetter(project);
                     if (getter != null) {
-                        //skip the setter if there's also a getter because it
-                        //would add a duplicate entry
+                        // skip the setter if there's also a getter because it
+                        // would add a duplicate entry
                         continue;
                     }
                 }
             }
             if (isStatic) {
                 if (!localDefinition.isStatic()) {
-                    //if we want static members, and the definition isn't
-                    //static, skip it
+                    // if we want static members, and the definition isn't
+                    // static, skip it
                     continue;
                 }
                 if (!includeSuperStatics && localDefinition.getParent() != typeScope.getContainingDefinition()) {
-                    //if we want static members, then members from base classes
-                    //aren't available with member access
+                    // if we want static members, then members from base classes
+                    // aren't available with member access
                     continue;
                 }
             }
             if (!isStatic && localDefinition.isStatic()) {
-                //if we want non-static members, and the definition is static,
-                //skip it!
+                // if we want non-static members, and the definition is static,
+                // skip it!
                 continue;
             }
             if (forMXML) {
                 addDefinitionAutoCompleteMXML(localDefinition, xmlnsPosition, isAttribute, prefix, null,
                         includeOpenTagBracket, includeOpenTagPrefix, nextChar, offsetTag, project, result);
-            } else //actionscript
+            } else // actionscript
             {
                 addDefinitionAutoCompleteActionScript(localDefinition, null, nextChar, addImportData, project, result);
             }
@@ -1502,11 +1563,11 @@ public class CompletionProvider {
             for (IMetaTag eventMetaTag : eventMetaTags) {
                 String eventName = eventMetaTag.getAttributeValue(IMetaAttributeConstants.NAME_EVENT_NAME);
                 if (eventName == null || eventName.length() == 0) {
-                    //vscode expects all items to have a name
+                    // vscode expects all items to have a name
                     continue;
                 }
                 if (eventNames.contains(eventName)) {
-                    //avoid duplicates!
+                    // avoid duplicates!
                     continue;
                 }
                 eventNames.add(eventName);
@@ -1560,11 +1621,11 @@ public class CompletionProvider {
             for (IMetaTag styleMetaTag : styleMetaTags) {
                 String styleName = styleMetaTag.getAttributeValue(IMetaAttributeConstants.NAME_STYLE_NAME);
                 if (styleName == null || styleName.length() == 0) {
-                    //vscode expects all items to have a name
+                    // vscode expects all items to have a name
                     continue;
                 }
                 if (styleNames.contains(styleName)) {
-                    //avoid duplicates!
+                    // avoid duplicates!
                     continue;
                 }
                 styleNames.add(styleName);
@@ -1575,10 +1636,10 @@ public class CompletionProvider {
                 boolean foundExisting = false;
                 for (CompletionItem item : items) {
                     if (item.getLabel().equals(styleName)) {
-                        //we want to avoid adding a duplicate item with the same
-                        //name. in flex, it's possible for a component to have
-                        //a property and a style with the same name.
-                        //if there's a conflict, the compiler will know how to handle it.
+                        // we want to avoid adding a duplicate item with the same
+                        // name. in flex, it's possible for a component to have
+                        // a property and a style with the same name.
+                        // if there's a conflict, the compiler will know how to handle it.
                         foundExisting = true;
                         break;
                     }
@@ -1636,7 +1697,7 @@ public class CompletionProvider {
             AddImportData addImportData, ILspProject project, CompletionList result) {
         String definitionBaseName = definition.getBaseName();
         if (definitionBaseName.length() == 0) {
-            //vscode expects all items to have a name
+            // vscode expects all items to have a name
             return;
         }
         if (definitionBaseName.startsWith(VECTOR_HIDDEN_PREFIX)) {
@@ -1669,10 +1730,6 @@ public class CompletionProvider {
                 item.setAdditionalTextEdits(Collections.singletonList(textEdit));
             }
         }
-        IDeprecationInfo deprecationInfo = definition.getDeprecationInfo();
-        if (deprecationInfo != null) {
-            item.setDeprecated(true);
-        }
         result.getItems().add(item);
     }
 
@@ -1691,7 +1748,7 @@ public class CompletionProvider {
         }
         String definitionBaseName = definition.getBaseName();
         if (definitionBaseName.length() == 0) {
-            //vscode expects all items to have a name
+            // vscode expects all items to have a name
             return;
         }
         CompletionItem item = CompletionItemUtils.createDefinitionItem(definition, project);
@@ -1721,10 +1778,11 @@ public class CompletionProvider {
             if (definition instanceof ITypeDefinition && prefix != null && prefix.length() > 0
                     && (offsetTag == null || offsetTag.equals(offsetTag.getParent().getRootTag()))
                     && xmlnsPosition == null) {
-                //if this is the root tag, we should add the XML namespace and
-                //close the tag automatically
+                // if this is the root tag, we should add the XML namespace and
+                // close the tag automatically
                 insertTextBuilder.append(" ");
-                if (!uri.equals(IMXMLLanguageConstants.NAMESPACE_MXML_2009)) {
+                if (!uri.equals(IMXMLLanguageConstants.NAMESPACE_MXML_2009)
+                        && !uri.equals(IMXMLLanguageConstants.NAMESPACE_MXML_2006)) {
                     insertTextBuilder.append("xmlns");
                     insertTextBuilder.append(IMXMLCoreConstants.colon);
                     insertTextBuilder.append("fx=\"");
@@ -1768,10 +1826,6 @@ public class CompletionProvider {
                 }
             }
         }
-        IDeprecationInfo deprecationInfo = definition.getDeprecationInfo();
-        if (deprecationInfo != null) {
-            item.setDeprecated(true);
-        }
         result.getItems().add(item);
     }
 
@@ -1785,7 +1839,7 @@ public class CompletionProvider {
                     char prevChar = (char) reader.read();
                     tagNeedsOpenBracket = prevChar != '<';
                 } catch (IOException e) {
-                    //just ignore it
+                    // just ignore it
                 } finally {
                     try {
                         reader.close();
@@ -1873,7 +1927,7 @@ public class CompletionProvider {
                     for (String value : values) {
                         value = value.trim();
                         if (value.length() == 0) {
-                            //skip empty values
+                            // skip empty values
                             continue;
                         }
                         CompletionItem enumItem = new CompletionItem();
@@ -1897,8 +1951,8 @@ public class CompletionProvider {
     }
 
     /**
-     * Using an existing tag, that may already have a prefix or short name,
-     * populate the completion list.
+     * Using an existing tag, that may already have a prefix or short name, populate
+     * the completion list.
      */
     private void autoCompleteTypesForMXMLFromExistingTag(CompletionList result, ILspProject project,
             ICompilationUnit offsetUnit, IMXMLTagData offsetTag, char nextChar, String typeFilter,
@@ -1911,14 +1965,14 @@ public class CompletionProvider {
         String tagNamespace = null;
         PrefixMap prefixMap = mxmlData.getRootTagPrefixMap();
         if (prefixMap != null) {
-            //could be null if this is the root tag and no prefixes are defined
+            // could be null if this is the root tag and no prefixes are defined
             tagNamespace = prefixMap.getNamespaceForPrefix(tagPrefix);
         }
         String tagNamespacePackage = null;
         if (tagNamespace != null && tagNamespace.endsWith("*")) {
             if (tagNamespace.length() > 1) {
                 tagNamespacePackage = tagNamespace.substring(0, tagNamespace.length() - 2);
-            } else //top level
+            } else // top level
             {
                 tagNamespacePackage = "";
             }
@@ -1932,7 +1986,7 @@ public class CompletionProvider {
             try {
                 definitions = unit.getFileScopeRequest().get().getExternallyVisibleDefinitions();
             } catch (Exception e) {
-                //safe to ignore
+                // safe to ignore
                 continue;
             }
 
@@ -1945,20 +1999,20 @@ public class CompletionProvider {
                     continue;
                 }
 
-                //first check that the tag either doesn't have a short name yet
-                //or that the definition's base name matches the short name 
+                // first check that the tag either doesn't have a short name yet
+                // or that the definition's base name matches the short name
                 if (tagStartShortNameForComparison.length() == 0
                         || typeDefinition.getBaseName().toLowerCase().startsWith(tagStartShortNameForComparison)) {
-                    //if a prefix already exists, make sure the definition is
-                    //in a namespace with that prefix
+                    // if a prefix already exists, make sure the definition is
+                    // in a namespace with that prefix
                     if (tagPrefix.length() > 0) {
                         Collection<XMLName> tagNames = project.getTagNamesForClass(typeDefinition.getQualifiedName());
                         for (XMLName tagName : tagNames) {
                             String tagNameNamespace = tagName.getXMLNamespace();
-                            //getTagNamesForClass() returns the 2006 namespace, even if that's
-                            //not what we're using in this file
+                            // getTagNamesForClass() returns the 2006 namespace, even if that's
+                            // not what we're using in this file
                             if (tagNameNamespace.equals(IMXMLLanguageConstants.NAMESPACE_MXML_2006)) {
-                                //use the language namespace of the root tag instead
+                                // use the language namespace of the root tag instead
                                 tagNameNamespace = mxmlData.getRootTag().getMXMLDialect().getLanguageNamespace();
                             }
                             if (prefixMap != null) {
@@ -1977,7 +2031,7 @@ public class CompletionProvider {
                                     false, nextChar, offsetTag, project, result);
                         }
                     } else {
-                        //no prefix yet, so complete the definition with a prefix
+                        // no prefix yet, so complete the definition with a prefix
                         MXMLNamespace ns = MXMLNamespaceUtils.getMXMLNamespaceForTypeDefinition(typeDefinition,
                                 mxmlData, project);
                         addDefinitionAutoCompleteMXML(typeDefinition, xmlnsPosition, false, ns.prefix, ns.uri, false,
@@ -1999,7 +2053,7 @@ public class CompletionProvider {
             try {
                 definitions = unit.getFileScopeRequest().get().getExternallyVisibleDefinitions();
             } catch (Exception e) {
-                //safe to ignore
+                // safe to ignore
                 continue;
             }
             for (IDefinition definition : definitions) {
@@ -2009,7 +2063,7 @@ public class CompletionProvider {
                         IMetaTag excludeClassMetaTag = definition
                                 .getMetaTagByName(IMetaAttributeConstants.ATTRIBUTE_EXCLUDECLASS);
                         if (excludeClassMetaTag != null) {
-                            //skip types with [ExcludeClass] metadata
+                            // skip types with [ExcludeClass] metadata
                             continue;
                         }
                     }
@@ -2046,7 +2100,7 @@ public class CompletionProvider {
             try {
                 definitions = unit.getFileScopeRequest().get().getExternallyVisibleDefinitions();
             } catch (Exception e) {
-                //safe to ignore
+                // safe to ignore
                 continue;
             }
             for (IDefinition definition : definitions) {
@@ -2060,7 +2114,7 @@ public class CompletionProvider {
                             IMetaTag excludeClassMetaTag = definition
                                     .getMetaTagByName(IMetaAttributeConstants.ATTRIBUTE_EXCLUDECLASS);
                             if (excludeClassMetaTag != null) {
-                                //skip types with [ExcludeClass] metadata
+                                // skip types with [ExcludeClass] metadata
                                 continue;
                             }
                         }

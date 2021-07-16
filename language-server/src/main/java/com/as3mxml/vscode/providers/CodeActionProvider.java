@@ -1,5 +1,5 @@
 /*
-Copyright 2016-2020 Bowler Hat LLC
+Copyright 2016-2021 Bowler Hat LLC
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -70,6 +70,9 @@ public class CodeActionProvider {
     private ActionScriptProjectManager actionScriptProjectManager;
     private FileTracker fileTracker;
 
+    public boolean codeGeneration_getterSetter_forcePublicFunctions = false;
+    public boolean codeGeneration_getterSetter_forcePrivateVariable = false;
+
     public CodeActionProvider(ActionScriptProjectManager actionScriptProjectManager, FileTracker fileTracker) {
         this.actionScriptProjectManager = actionScriptProjectManager;
         this.fileTracker = fileTracker;
@@ -87,7 +90,7 @@ public class CodeActionProvider {
             }
             return Collections.emptyList();
         }
-        //we don't need to create code actions for non-open files
+        // we don't need to create code actions for non-open files
         if (!fileTracker.isOpen(path)) {
             if (cancelToken != null) {
                 cancelToken.checkCanceled();
@@ -100,7 +103,7 @@ public class CodeActionProvider {
             if (cancelToken != null) {
                 cancelToken.checkCanceled();
             }
-            //the path must be in the workspace or source-path
+            // the path must be in the workspace or source-path
             return Collections.emptyList();
         }
         ILspProject project = projectData.project;
@@ -109,7 +112,7 @@ public class CodeActionProvider {
             if (cancelToken != null) {
                 cancelToken.checkCanceled();
             }
-            //the path must be in the workspace or source-path
+            // the path must be in the workspace or source-path
             return Collections.emptyList();
         }
 
@@ -124,7 +127,8 @@ public class CodeActionProvider {
             if (ast != null) {
                 String fileText = fileTracker.getText(path);
                 CodeActionsUtils.findGetSetCodeActions(ast, project, textDocument.getUri(), fileText, params.getRange(),
-                        codeActions);
+                        codeGeneration_getterSetter_forcePublicFunctions,
+                        codeGeneration_getterSetter_forcePrivateVariable, codeActions);
             }
         }
         if (cancelToken != null) {
@@ -152,8 +156,8 @@ public class CodeActionProvider {
         boolean handledUnimplementedMethods = false;
         for (Diagnostic diagnostic : diagnostics) {
             String code = null;
-            Either<String, Number> eitherCode = diagnostic.getCode();
-            //I don't know why this can be null
+            Either<String, Integer> eitherCode = diagnostic.getCode();
+            // I don't know why this can be null
             if (eitherCode == null) {
                 continue;
             }
@@ -169,65 +173,65 @@ public class CodeActionProvider {
                 continue;
             }
             switch (code) {
-                case "1120": //AccessUndefinedPropertyProblem
+                case "1120": // AccessUndefinedPropertyProblem
                 {
-                    //see if there's anything we can import
+                    // see if there's anything we can import
                     createCodeActionsForImport(path, diagnostic, projectData, codeActions);
                     createCodeActionForMissingLocalVariable(path, diagnostic, projectData, codeActions);
                     createCodeActionForMissingField(path, diagnostic, projectData, codeActions);
                     createCodeActionForMissingEventListener(path, diagnostic, projectData, codeActions);
                     break;
                 }
-                case "1046": //UnknownTypeProblem
+                case "1046": // UnknownTypeProblem
                 {
-                    //see if there's anything we can import
+                    // see if there's anything we can import
                     createCodeActionsForImport(path, diagnostic, projectData, codeActions);
                     break;
                 }
-                case "1017": //UnknownSuperclassProblem
+                case "1017": // UnknownSuperclassProblem
                 {
-                    //see if there's anything we can import
+                    // see if there's anything we can import
                     createCodeActionsForImport(path, diagnostic, projectData, codeActions);
                     break;
                 }
-                case "1045": //UnknownInterfaceProblem
+                case "1045": // UnknownInterfaceProblem
                 {
-                    //see if there's anything we can import
+                    // see if there's anything we can import
                     createCodeActionsForImport(path, diagnostic, projectData, codeActions);
                     break;
                 }
-                case "1061": //StrictUndefinedMethodProblem
+                case "1061": // StrictUndefinedMethodProblem
                 {
                     createCodeActionForMissingMethod(path, diagnostic, projectData, codeActions);
                     break;
                 }
-                case "1073": //MissingCatchOrFinallyProblem
+                case "1073": // MissingCatchOrFinallyProblem
                 {
                     createCodeActionForMissingCatchOrFinally(path, diagnostic, projectData, codeActions);
                     break;
                 }
-                case "1119": //AccessUndefinedMemberProblem
+                case "1119": // AccessUndefinedMemberProblem
                 {
                     createCodeActionForMissingField(path, diagnostic, projectData, codeActions);
                     createCodeActionForMissingEventListener(path, diagnostic, projectData, codeActions);
                     break;
                 }
-                case "1178": //InaccessiblePropertyReferenceProblem
+                case "1178": // InaccessiblePropertyReferenceProblem
                 {
-                    //see if there's anything we can import
+                    // see if there's anything we can import
                     createCodeActionsForImport(path, diagnostic, projectData, codeActions);
                     break;
                 }
-                case "1180": //CallUndefinedMethodProblem
+                case "1180": // CallUndefinedMethodProblem
                 {
-                    //see if there's anything we can import
+                    // see if there's anything we can import
                     createCodeActionsForImport(path, diagnostic, projectData, codeActions);
                     createCodeActionForMissingMethod(path, diagnostic, projectData, codeActions);
                     break;
                 }
-                case "1044": //UnimplementedInterfaceMethodProblem
+                case "1044": // UnimplementedInterfaceMethodProblem
                 {
-                    //only needs to be handled one time
+                    // only needs to be handled one time
                     if (!handledUnimplementedMethods) {
                         handledUnimplementedMethods = true;
                         createCodeActionForUnimplementedMethods(path, diagnostic, projectData, codeActions);
@@ -253,7 +257,7 @@ public class CodeActionProvider {
             if (mxmlData != null) {
                 IMXMLTagData offsetTag = MXMLDataUtils.getOffsetMXMLTag(mxmlData, currentOffset);
                 if (offsetTag != null) {
-                    //workaround for bug in Royale compiler
+                    // workaround for bug in Royale compiler
                     Position newPosition = new Position(position.getLine(), position.getCharacter() + 1);
                     int newOffset = LanguageServerCompilerUtils.getOffsetFromPosition(fileTracker.getReader(path),
                             newPosition, includeFileData);
@@ -275,7 +279,7 @@ public class CodeActionProvider {
                         identifierNode = (IIdentifierNode) offsetNode;
                     }
                 }
-            } else //no member access
+            } else // no member access
             {
                 identifierNode = (IIdentifierNode) offsetNode;
             }
@@ -313,7 +317,7 @@ public class CodeActionProvider {
             if (mxmlData != null) {
                 IMXMLTagData offsetTag = MXMLDataUtils.getOffsetMXMLTag(mxmlData, currentOffset);
                 if (offsetTag != null) {
-                    //workaround for bug in Royale compiler
+                    // workaround for bug in Royale compiler
                     Position newPosition = new Position(position.getLine(), position.getCharacter() + 1);
                     int newOffset = LanguageServerCompilerUtils.getOffsetFromPosition(fileTracker.getReader(path),
                             newPosition, includeFileData);
@@ -437,7 +441,7 @@ public class CodeActionProvider {
             if (mxmlData != null) {
                 IMXMLTagData offsetTag = MXMLDataUtils.getOffsetMXMLTag(mxmlData, currentOffset);
                 if (offsetTag != null) {
-                    //workaround for bug in Royale compiler
+                    // workaround for bug in Royale compiler
                     Position newPosition = new Position(position.getLine(), position.getCharacter() + 1);
                     int newOffset = LanguageServerCompilerUtils.getOffsetFromPosition(fileTracker.getReader(path),
                             newPosition, includeFileData);
@@ -497,7 +501,7 @@ public class CodeActionProvider {
             if (mxmlData != null) {
                 IMXMLTagData offsetTag = MXMLDataUtils.getOffsetMXMLTag(mxmlData, currentOffset);
                 if (offsetTag != null) {
-                    //workaround for bug in Royale compiler
+                    // workaround for bug in Royale compiler
                     Position newPosition = new Position(position.getLine(), position.getCharacter() + 1);
                     int newOffset = LanguageServerCompilerUtils.getOffsetFromPosition(fileTracker.getReader(path),
                             newPosition, includeFileData);
@@ -588,7 +592,7 @@ public class CodeActionProvider {
             }
         }
         if (offsetNode instanceof IMXMLInstanceNode && offsetTag != null) {
-            //workaround for bug in Royale compiler
+            // workaround for bug in Royale compiler
             Position newPosition = new Position(position.getLine(), position.getCharacter() + 1);
             int newOffset = LanguageServerCompilerUtils.getOffsetFromPosition(fileTracker.getReader(path), newPosition,
                     includeFileData);
@@ -613,7 +617,7 @@ public class CodeActionProvider {
         IIdentifierNode identifierNode = (IIdentifierNode) offsetNode;
         String typeString = identifierNode.getName();
 
-        List<IDefinition> definitions = ASTUtils.findDefinitionsThatMatchName(typeString,
+        List<IDefinition> definitions = ASTUtils.findDefinitionsThatMatchName(typeString, false,
                 project.getCompilationUnits());
         for (IDefinition definitionToImport : definitions) {
             WorkspaceEdit edit = CodeActionsUtils.createWorkspaceEditForAddImport(definitionToImport, fileText, uri,

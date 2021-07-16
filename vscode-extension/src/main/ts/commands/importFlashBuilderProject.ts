@@ -1,5 +1,5 @@
 /*
-Copyright 2016-2020 Bowler Hat LLC
+Copyright 2016-2021 Bowler Hat LLC
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -80,7 +80,7 @@ export function importFlashBuilderProject(
 ) {
   getOutputChannel().clear();
   getOutputChannel().appendLine(MESSAGE_IMPORT_START);
-  getOutputChannel().show();
+  getOutputChannel().show(true);
   let result = importFlashBuilderProjectInternal(workspaceFolder);
   if (result) {
     getOutputChannel().appendLine(MESSAGE_IMPORT_COMPLETE);
@@ -597,7 +597,26 @@ function migrateActionScriptProperties(
   if (!isFlexLibrary) {
     let workersElement = findChildElementByName(rootChildren, "workers");
     if (workersElement) {
-      migrateWorkersElement(workersElement, result);
+      let workerAppPath = applicationPath;
+      let workerOutputFolderPath = "";
+      if (compilerElement) {
+        let attributes = compilerElement.attributes;
+        if ("sourceFolderPath" in attributes) {
+          workerAppPath = path.posix.join(
+            attributes.sourceFolderPath,
+            workerAppPath
+          );
+        }
+        if ("outputFolderPath" in attributes) {
+          workerOutputFolderPath = attributes.outputFolderPath;
+        }
+      }
+      migrateWorkersElement(
+        workersElement,
+        workerAppPath,
+        workerOutputFolderPath,
+        result
+      );
     }
   }
 
@@ -812,6 +831,20 @@ function findOnSourcePath(thePath: string, folderPath: string, result: any) {
   return thePath;
 }
 
+function stripSourcePath(thePath: string, result: any) {
+  let sourcePath = result.compilerOptions["source-path"];
+  if (sourcePath) {
+    sourcePath.some((sourcePath) => {
+      if (thePath.startsWith(sourcePath + path.posix.sep)) {
+        thePath = thePath.substr(sourcePath.length + 1);
+        return true;
+      }
+      return false;
+    });
+  }
+  return thePath;
+}
+
 function migrateCompilerLibraryPathElement(
   libraryPathElement: any,
   linkedResources: EclipseLinkedResource[],
@@ -956,9 +989,8 @@ function migrateBuildTargetsElement(
             linkedResources
           );
           platformOptions.signingOptions = platformOptions.signingOptions || {};
-          platformOptions.signingOptions[
-            "provisioning-profile"
-          ] = provisioningFile;
+          platformOptions.signingOptions["provisioning-profile"] =
+            provisioningFile;
         }
       }
     } else if (isAndroid) {
@@ -1066,16 +1098,30 @@ function migrateModulesElement(
   }
 }
 
-function migrateWorkersElement(workersElement: any, result: any) {
+function migrateWorkersElement(
+  workersElement: any,
+  appPath: string,
+  outputFolderPath: string,
+  result: any
+) {
   let children = workersElement.children as any[];
   let workers = children.filter((child) => {
     return child.type === "element" && child.name === "worker";
   });
-  workers.forEach((worker) => {
+  var newWorkers = workers.map((worker) => {
     let attributes = worker.attributes;
-    let workerPath = "path" in attributes ? attributes.path : "";
-    addWarning(WARNING_WORKER + workerPath);
+    let file = "path" in attributes ? attributes.path : "";
+    let embed = "embed" in attributes ? attributes.embed === "true" : false;
+    let outputRoot = embed ? "workerswfs" : outputFolderPath;
+    let output = stripSourcePath(file, result);
+    output = output.substr(0, output.length - path.extname(output).length);
+    output += FILE_EXTENSION_SWF;
+    output = path.posix.join(outputRoot, output);
+    return { file, output };
   });
+  if (newWorkers.length > 0) {
+    result.workers = newWorkers;
+  }
 }
 
 function migrateThemeElement(

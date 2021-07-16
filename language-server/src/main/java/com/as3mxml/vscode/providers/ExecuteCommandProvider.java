@@ -1,5 +1,5 @@
 /*
-Copyright 2016-2020 Bowler Hat LLC
+Copyright 2016-2021 Bowler Hat LLC
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -71,6 +71,10 @@ public class ExecuteCommandProvider {
     private Workspace compilerWorkspace;
     private ActionScriptLanguageClient languageClient;
     private boolean concurrentRequests;
+
+    public boolean organizeImports_addMissingImports = true;
+    public boolean organizeImports_removeUnusedImports = true;
+    public boolean organizeImports_insertNewLineBetweenTopLevelPackages = true;
 
     public ExecuteCommandProvider(ActionScriptProjectManager actionScriptProjectManager, FileTracker fileTracker,
             Workspace compilerWorkspace, ActionScriptLanguageClient languageClient, boolean concurrentRequests) {
@@ -145,7 +149,7 @@ public class ExecuteCommandProvider {
             File[] files = currentDir.listFiles();
             for (File file : files) {
                 if (file.isDirectory()) {
-                    //add this directory to the list to search
+                    // add this directory to the list to search
                     directories.add(file);
                     continue;
                 }
@@ -260,26 +264,26 @@ public class ExecuteCommandProvider {
 
     private void openFileForOrganizeImports(Path path) {
         if (fileTracker.isOpen(path)) {
-            //already opened
+            // already opened
             return;
         }
 
-        //if the file isn't open in an editor, we need to read it from the
-        //file system instead.
+        // if the file isn't open in an editor, we need to read it from the
+        // file system instead.
         String text = fileTracker.getText(path);
         if (text == null) {
             return;
         }
 
-        //for some reason, the full AST is not populated if the file is not
-        //already open in the editor. we use a similar workaround to didOpen
-        //to force the AST to be populated.
+        // for some reason, the full AST is not populated if the file is not
+        // already open in the editor. we use a similar workaround to didOpen
+        // to force the AST to be populated.
 
-        //we'll clear this out later before we return from this function
+        // we'll clear this out later before we return from this function
         fileTracker.openFile(path, text);
 
-        //notify the workspace that it should read the file from memory
-        //instead of loading from the file system
+        // notify the workspace that it should read the file from memory
+        // instead of loading from the file system
         String normalizedPath = FilenameNormalization.normalize(path.toAbsolutePath().toString());
         IFileSpecification fileSpec = fileTracker.getFileSpecification(normalizedPath);
         compilerWorkspace.fileChanged(fileSpec);
@@ -311,24 +315,29 @@ public class ExecuteCommandProvider {
         List<IImportNode> importsToRemove = null;
         IASNode ast = ASTUtils.getCompilationUnitAST(unit);
         if (ast != null) {
-            missingNames = ASTUtils.findUnresolvedIdentifiersToImport(ast, project);
-            Set<String> requiredImports = project.getQNamesOfDependencies(unit);
-            importsToRemove = ASTUtils.findImportNodesToRemove(ast, requiredImports);
+            if (organizeImports_addMissingImports) {
+                missingNames = ASTUtils.findUnresolvedIdentifiersToImport(ast, project);
+            }
+            if (organizeImports_removeUnusedImports) {
+                Set<String> requiredImports = project.getQNamesOfDependencies(unit);
+                importsToRemove = ASTUtils.findImportNodesToRemove(ast, requiredImports);
+            }
         }
         if (missingNames != null) {
             importsToAdd = new HashSet<>();
             Collection<ICompilationUnit> units = project.getCompilationUnits();
             for (String missingName : missingNames) {
-                List<IDefinition> definitions = ASTUtils.findDefinitionsThatMatchName(missingName, units);
+                List<IDefinition> definitions = ASTUtils.findDefinitionsThatMatchName(missingName, false, units);
                 if (definitions.size() == 1) {
-                    //add an import only if exactly one type is found
+                    // add an import only if exactly one type is found
                     importsToAdd.add(definitions.get(0).getQualifiedName());
                 }
             }
         }
-        List<TextEdit> edits = ImportTextEditUtils.organizeImports(text, importsToRemove, importsToAdd);
+        List<TextEdit> edits = ImportTextEditUtils.organizeImports(text, importsToRemove, importsToAdd,
+                organizeImports_insertNewLineBetweenTopLevelPackages);
         if (edits == null || edits.size() == 0) {
-            //no edit required
+            // no edit required
             return;
         }
         changes.put(uri, edits);
@@ -398,7 +407,7 @@ public class ExecuteCommandProvider {
             WorkspaceEdit workspaceEdit = CodeActionsUtils.createWorkspaceEditForAddImport(qualifiedName, text, uri,
                     importRange);
             if (workspaceEdit == null) {
-                //no edit required
+                // no edit required
                 return new Object();
             }
 
@@ -463,7 +472,7 @@ public class ExecuteCommandProvider {
                 if (cancelToken != null) {
                     cancelToken.checkCanceled();
                 }
-                //no edit required
+                // no edit required
                 return new Object();
             }
 
